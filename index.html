@@ -30,7 +30,7 @@
         }
         #chart-container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1200px;
             position: relative;
         }
         .tooltip {
@@ -79,9 +79,10 @@
     </div>
 
     <script>
-        const width = 1000;
-        const height = 600;
-        const margin = { top: 20, right: 40, bottom: 50, left: 60 };
+        // INCREASED CANVAS SIZE: 1200x750 to accommodate larger hex clusters
+        const width = 1200;
+        const height = 750;
+        const margin = { top: 30, right: 40, bottom: 60, left: 60 };
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;
 
@@ -94,14 +95,19 @@
         const tooltip = d3.select("#tooltip");
         let globalData = [];
 
-        // Colors based on methodology
         const roleColors = {
-            "Catcher": "#1f77b4",  // Blue
-            "Batter": "#39ff14",   // Neon Green
-            "Pitcher": "#ff69b4"   // Pink
+            "Catcher": "#1f77b4",  
+            "Batter": "#39ff14",   
+            "Pitcher": "#ff69b4"   
         };
 
-        // Hexagonal Spiral Algorithm for deterministic offset of overlapping points
+        // DOM SORTING: Ensures Pitchers and Catchers are drawn on top of the Batters mass
+        const roleOrder = {
+            "Batter": 1,
+            "Catcher": 2,
+            "Pitcher": 3
+        };
+
         function getHexSpiral(index, radius) {
             if (index === 0) return [0, 0];
             let ring = 1, max_in_ring = 6, current_max = 6;
@@ -126,7 +132,6 @@
         d3.json("abs_data.json").then(data => {
             globalData = data;
             
-            // Populate Filters
             const populateSelect = (id, key) => {
                 const select = d3.select(id);
                 const uniqueVals = [...new Set(data.map(d => d[key]))].filter(v => v && v !== 'Unknown').sort();
@@ -136,9 +141,7 @@
             populateSelect("#team-filter", "team");
             populateSelect("#league-filter", "league");
 
-            // Event Listeners for Filters
             d3.selectAll("select").on("change", updateChart);
-
             updateChart();
         });
 
@@ -147,11 +150,14 @@
             const team = d3.select("#team-filter").node().value;
             const league = d3.select("#league-filter").node().value;
 
-            const filteredData = globalData.filter(d => 
+            let filteredData = globalData.filter(d => 
                 (season === "all" || d.season === season) &&
                 (team === "all" || d.team === team) &&
                 (league === "all" || d.league === league)
             );
+
+            // Sort data to enforce drawing order
+            filteredData.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
 
             render(filteredData);
         }
@@ -161,17 +167,14 @@
 
             if (data.length === 0) return;
 
-            // Log scale for X (Challenges)
             const xScale = d3.scaleLog()
                 .domain([1, Math.max(200, d3.max(data, d => d.challenges))])
                 .range([0, innerWidth]);
 
-            // Linear scale for Y (Overturn Rate)
             const yScale = d3.scaleLinear()
                 .domain([0, 100])
                 .range([innerHeight, 0]);
 
-            // Draw Y-Axis Grid & Labels
             const yTicks = [0, 25, 50, 75, 100];
             yTicks.forEach(tick => {
                 svg.append("line")
@@ -187,7 +190,6 @@
             svg.append("text").attr("class", "axis-text").attr("transform", "rotate(-90)")
                 .attr("x", -innerHeight/2).attr("y", -45).attr("text-anchor", "middle").text("Overturn rate");
 
-            // Draw X-Axis Grid & Labels
             const xTicks = [1, 2, 5, 10, 20, 50, 100, 200];
             xTicks.forEach(tick => {
                 svg.append("line")
@@ -204,20 +206,20 @@
                 .attr("x", innerWidth/2).attr("y", innerHeight + 40)
                 .attr("text-anchor", "middle").text("Challenges made • Log scale");
 
-            // Calculate exact Hexagonal positions based on identical coordinates
             const positionMap = {};
             data.forEach(d => {
                 const key = `${d.challenges}_${d.overturn_rate}`;
                 if (!positionMap[key]) positionMap[key] = 0;
                 
-                const [offsetX, offsetY] = getHexSpiral(positionMap[key], 5);
+                // INCREASED SPACING: Radius set to 8. (Dot radius is 3.5, diameter is 7). 
+                // This guarantees a 1px gap between all overlapping dots in a cluster.
+                const [offsetX, offsetY] = getHexSpiral(positionMap[key], 8);
                 d.cx = xScale(d.challenges) + offsetX;
                 d.cy = yScale(d.overturn_rate) + offsetY;
                 
                 positionMap[key]++;
             });
 
-            // Draw Dots
             svg.selectAll(".dot")
                 .data(data)
                 .enter().append("circle")
@@ -239,6 +241,7 @@
                         .style("top", (event.pageY - 28) + "px");
                     
                     d3.select(event.currentTarget)
+                        .raise() // Pops the hovered dot to the absolute front
                         .attr("stroke", "#fff")
                         .attr("stroke-width", 2)
                         .attr("r", 5);
