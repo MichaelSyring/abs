@@ -10,7 +10,9 @@
         h2 { margin-top: 0; font-weight: 600; color: #fff; }
         .controls { display: flex; gap: 15px; margin-bottom: 30px; }
         select { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; outline: none; cursor: pointer; }
-        #chart-container { width: 100%; max-width: 1200px; position: relative; }
+        
+        /* Max-width expanded to accommodate the new 1600px canvas */
+        #chart-container { width: 100%; max-width: 1600px; position: relative; overflow-x: auto; }
         
         .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 10; }
         .tooltip .name { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #58a6ff; }
@@ -20,7 +22,9 @@
         .axis-text { fill: #8b949e; font-size: 12px; }
         .legend { display: flex; gap: 20px; font-size: 12px; margin-bottom: 10px; }
         .legend-item { display: flex; align-items: center; gap: 6px; }
-        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        
+        /* Legend dots slightly smaller to match the new scale */
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
     </style>
 </head>
 <body>
@@ -45,8 +49,9 @@
     </div>
 
     <script>
-        const width = 1200;
-        const height = 750;
+        // MASSIVE CANVAS EXPANSION: 1600x1000 to physically separate the logarithmic clusters
+        const width = 1600;
+        const height = 1000;
         
         const margin = { top: 80, right: 80, bottom: 80, left: 120 };
         const innerWidth = width - margin.left - margin.right;
@@ -179,8 +184,9 @@
                 
                 if (!positionMap[key]) positionMap[key] = 0;
                 
-                // INCREASED SPACING: Radius expanded to 10 for cleaner gaps between dots
-                const [offsetX, offsetY] = getHexSpiral(positionMap[key], 10);
+                // REDUCED SPACING: Because dot radius is now 2.5 (diameter 5), a spiral 
+                // radius of 6.5 yields a perfectly proportioned 1.5px gap between dots.
+                const [offsetX, offsetY] = getHexSpiral(positionMap[key], 6.5);
                 d.cx = xScale(d.challenges) + offsetX;
                 d.cy = yScale(d.overturn_rate) + offsetY;
                 
@@ -189,13 +195,14 @@
 
             data.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
 
+            // REDUCED DOT RADIUS: Shrunk to 2.5 to compress the overall cluster sizes
             const circles = svg.selectAll(".dot")
                 .data(data)
                 .enter().append("circle")
                 .attr("class", "dot")
                 .attr("cx", d => d.cx)
                 .attr("cy", d => d.cy)
-                .attr("r", 3.5)
+                .attr("r", 2.5)
                 .attr("fill", d => roleColors[d.role] || "#ffffff")
                 .style("cursor", "crosshair");
 
@@ -215,10 +222,10 @@
                 hoverLayer.append("circle")
                     .attr("cx", d.cx)
                     .attr("cy", d.cy)
-                    .attr("r", 5)
+                    .attr("r", 4)
                     .attr("fill", roleColors[d.role] || "#ffffff")
                     .attr("stroke", "#fff")
-                    .attr("stroke-width", 2);
+                    .attr("stroke-width", 1.5);
             })
             .on("mousemove", function(event) {
                 const tNode = tooltip.node();
