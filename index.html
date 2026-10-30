@@ -38,7 +38,7 @@
 <body>
 
     <div class="header-container">
-        <h2>ABS Challenges: Triple-A 2025 to MLB 2026</h2>
+        <h2>Success, with the workload in view</h2>
         <div class="subtitle" id="dynamic-subtitle">Loading data...</div>
     </div>
     
@@ -51,7 +51,6 @@
         <div class="legend-total" id="count-total">0 player-role dots</div>
     </div>
 
-    <!-- Added Role Filter Dropdown -->
     <div class="controls">
         <select id="season-filter"><option value="all">All Seasons</option></select>
         <select id="team-filter"><option value="all">All Teams</option></select>
@@ -118,7 +117,7 @@
             populateSelect("#season-filter", "season");
             populateSelect("#team-filter", "team");
             populateSelect("#league-filter", "league");
-            populateSelect("#role-filter", "role"); // Populate the new role filter
+            populateSelect("#role-filter", "role");
 
             d3.selectAll("select").on("change", updateChart);
             updateChart();
@@ -130,7 +129,6 @@
             const league = d3.select("#league-filter").node().value;
             const role = d3.select("#role-filter").node().value;
 
-            // Updated filtering logic to evaluate the new Role selection
             let filteredData = globalData.filter(d => 
                 (season === "all" || d.season === season) &&
                 (team === "all" || d.team === team) &&
@@ -140,13 +138,15 @@
 
             const uniquePlayers = new Set(filteredData.map(d => d.player_name)).size;
             
-            let seasonText = season === 'all' ? 'All Seasons' : `${season} regular season`;
-            let teamText = team === 'all' ? 'All Teams' : `${team}`;
-            let leagueText = league === 'all' ? 'All Leagues' : `${league}`;
+            // REMOVED HARDCODED "regular season" STRING
+            let seasonText = season === 'all' ? 'All Seasons' : season; 
+            
+            let teamText = team === 'all' ? '' : ` (${team})`;
+            let leagueText = league === 'all' ? 'All Leagues' : league;
             let roleText = role === 'all' ? '' : ` (${role}s only)`;
             
             document.getElementById('dynamic-subtitle').innerText = 
-                `${leagueText} ${seasonText} · ${uniquePlayers} players · All ${filteredData.length} player-role dots separated${roleText}`;
+                `${leagueText} ${seasonText}${teamText} · ${uniquePlayers} players · All ${filteredData.length} player-role dots separated${roleText}`;
 
             let catchers = filteredData.filter(d => d.role === 'Catcher').length;
             let batters = filteredData.filter(d => d.role === 'Batter').length;
