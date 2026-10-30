@@ -8,7 +8,6 @@
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; margin: 0; padding: 30px; }
         
-        /* Updated Title Header Styling */
         .header-container { margin-bottom: 20px; }
         h2 { margin: 0 0 8px 0; font-weight: 700; color: #fff; font-size: 28px; letter-spacing: -0.5px; }
         .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
@@ -31,7 +30,6 @@
         .grid-line { stroke: #30363d; stroke-width: 1; }
         .axis-text { fill: #8b949e; font-size: 12px; }
         
-        /* Colored Text for the Legend */
         .color-catchers { color: #1f77b4; }
         .color-batters { color: #39ff14; }
         .color-pitchers { color: #ff69b4; }
@@ -53,10 +51,12 @@
         <div class="legend-total" id="count-total">0 player-role dots</div>
     </div>
 
+    <!-- Added Role Filter Dropdown -->
     <div class="controls">
         <select id="season-filter"><option value="all">All Seasons</option></select>
         <select id="team-filter"><option value="all">All Teams</option></select>
         <select id="league-filter"><option value="all">All Leagues</option></select>
+        <select id="role-filter"><option value="all">All Roles</option></select>
     </div>
 
     <div id="chart-container">
@@ -114,9 +114,11 @@
                 const uniqueVals = [...new Set(data.map(d => d[key]))].filter(v => v && v !== 'Unknown').sort();
                 uniqueVals.forEach(v => select.append("option").attr("value", v).text(v));
             };
+            
             populateSelect("#season-filter", "season");
             populateSelect("#team-filter", "team");
             populateSelect("#league-filter", "league");
+            populateSelect("#role-filter", "role"); // Populate the new role filter
 
             d3.selectAll("select").on("change", updateChart);
             updateChart();
@@ -126,22 +128,25 @@
             const season = d3.select("#season-filter").node().value;
             const team = d3.select("#team-filter").node().value;
             const league = d3.select("#league-filter").node().value;
+            const role = d3.select("#role-filter").node().value;
 
+            // Updated filtering logic to evaluate the new Role selection
             let filteredData = globalData.filter(d => 
                 (season === "all" || d.season === season) &&
                 (team === "all" || d.team === team) &&
-                (league === "all" || d.league === league)
+                (league === "all" || d.league === league) &&
+                (role === "all" || d.role === role)
             );
 
-            // DYNAMIC TITLE AND LEGEND UPDATES
             const uniquePlayers = new Set(filteredData.map(d => d.player_name)).size;
             
             let seasonText = season === 'all' ? 'All Seasons' : `${season} regular season`;
             let teamText = team === 'all' ? 'All Teams' : `${team}`;
             let leagueText = league === 'all' ? 'All Leagues' : `${league}`;
+            let roleText = role === 'all' ? '' : ` (${role}s only)`;
             
             document.getElementById('dynamic-subtitle').innerText = 
-                `${leagueText} ${seasonText} · ${uniquePlayers} players · All ${filteredData.length} player-role dots separated`;
+                `${leagueText} ${seasonText} · ${uniquePlayers} players · All ${filteredData.length} player-role dots separated${roleText}`;
 
             let catchers = filteredData.filter(d => d.role === 'Catcher').length;
             let batters = filteredData.filter(d => d.role === 'Batter').length;
@@ -159,19 +164,15 @@
             svg.selectAll("*").remove();
             if (data.length === 0) return;
 
-            // AXIS PADDING LOGIC:
-            // Domain starts at 0.5 (Log scale can't be 0) and extends to max + 50 to create horizontal padding
             const maxChallenges = Math.max(200, d3.max(data, d => d.challenges));
             const xScale = d3.scaleLog()
                 .domain([0.5, maxChallenges + (maxChallenges * 0.5)])
                 .range([0, innerWidth]);
 
-            // Y domain maps from -15% to 115% to create vertical padding above 100% and below 0%
             const yScale = d3.scaleLinear()
                 .domain([-15, 115])
                 .range([innerHeight, 0]);
 
-            // Draw manual gridlines only at the intended tick intervals (0, 25, 50, 75, 100)
             const yTicks = [0, 25, 50, 75, 100];
             yTicks.forEach(tick => {
                 svg.append("line")
@@ -190,7 +191,6 @@
 
             const xTicks = [1, 2, 5, 10, 20, 50, 100, 200];
             xTicks.forEach(tick => {
-                // Ensure we only draw X ticks that are within the current data max to avoid empty space lines
                 if (tick <= maxChallenges) {
                     svg.append("line")
                         .attr("class", "grid-line")
@@ -265,7 +265,7 @@
                 let left = event.pageX + 15;
                 let top = event.pageY + 15;
                 
-                if (event.clientX + tWidth + 20 > window.innerWidth) {
+                if (left + tWidth > document.body.clientWidth - 10) {
                     left = event.pageX - tWidth - 15;
                 }
                 
