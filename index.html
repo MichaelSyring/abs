@@ -11,7 +11,7 @@
         .controls { display: flex; gap: 15px; margin-bottom: 30px; }
         select { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; outline: none; cursor: pointer; }
         #chart-container { width: 100%; max-width: 1200px; position: relative; }
-        .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.15s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 10; }
+        .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.1s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 10; }
         .tooltip .name { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #58a6ff; }
         .tooltip .stat { margin: 3px 0; }
         .grid-line { stroke: #30363d; stroke-width: 1; }
@@ -45,7 +45,12 @@
     <script>
         const width = 1200;
         const height = 750;
-        const margin = { top: 30, right: 40, bottom: 60, left: 60 };
+        
+        // EXPANDED MARGINS: Increased significantly (Top/Bottom to 80, Left to 120) 
+        // to give the extreme 100%, 0%, and 1-challenge clusters plenty of room to 
+        // expand outward without bleeding off the edge of the SVG.
+        const margin = { top: 80, right: 80, bottom: 80, left: 120 };
+        
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;
 
@@ -143,12 +148,14 @@
                     .attr("y1", yScale(tick)).attr("y2", yScale(tick));
                 svg.append("text")
                     .attr("class", "axis-text")
-                    .attr("x", -10).attr("y", yScale(tick) + 4)
+                    .attr("x", -15).attr("y", yScale(tick) + 4)
                     .attr("text-anchor", "end")
                     .text(tick + "%");
             });
+            
+            // Adjusted label position for increased margin
             svg.append("text").attr("class", "axis-text").attr("transform", "rotate(-90)")
-                .attr("x", -innerHeight/2).attr("y", -45).attr("text-anchor", "middle").text("Overturn rate");
+                .attr("x", -innerHeight/2).attr("y", -60).attr("text-anchor", "middle").text("Overturn rate");
 
             const xTicks = [1, 2, 5, 10, 20, 50, 100, 200];
             xTicks.forEach(tick => {
@@ -162,13 +169,14 @@
                     .attr("text-anchor", "middle")
                     .text(tick);
             });
+            
+            // Adjusted label position for increased margin
             svg.append("text").attr("class", "axis-text")
-                .attr("x", innerWidth/2).attr("y", innerHeight + 40)
+                .attr("x", innerWidth/2).attr("y", innerHeight + 60)
                 .attr("text-anchor", "middle").text("Challenges made • Log scale");
 
             const positionMap = {};
             data.forEach(d => {
-                // Rounding eliminates microscopic floating-point deviations so identical stats group correctly
                 const roundedRate = Math.round(d.overturn_rate * 10) / 10;
                 const key = `${d.challenges}_${roundedRate}`;
                 
@@ -197,15 +205,41 @@
                             <div class="stat"><b>Overturned:</b> ${d.overturned}</div>
                             <div class="stat"><b>Rate:</b> ${d.overturn_rate.toFixed(1)}%</div>
                             <div class="stat"><b>Team/League:</b> ${d.team} / ${d.league}</div>
-                        `)
-                        .style("left", (event.pageX + 15) + "px")
-                        .style("top", (event.pageY - 28) + "px");
+                        `);
                     
                     d3.select(event.currentTarget)
                         .raise()
                         .attr("stroke", "#fff")
                         .attr("stroke-width", 2)
                         .attr("r", 5);
+                })
+                .on("mousemove", (event) => {
+                    // DYNAMIC POSITIONING LOGIC
+                    const tNode = tooltip.node();
+                    const tWidth = tNode.offsetWidth;
+                    const tHeight = tNode.offsetHeight;
+                    
+                    // Default position slightly down and right of the cursor
+                    let left = event.pageX + 15;
+                    let top = event.pageY - 28;
+                    
+                    // If the tooltip bleeds off the RIGHT edge, flip it to the left side
+                    if (left + tWidth > window.innerWidth - 20) {
+                        left = event.pageX - tWidth - 15;
+                    }
+                    
+                    // If the tooltip bleeds off the BOTTOM edge, push it upward
+                    if (top + tHeight > window.innerHeight + window.scrollY - 20) {
+                        top = event.pageY - tHeight - 15;
+                    }
+                    
+                    // Prevent the tooltip from bleeding off the TOP edge
+                    if (top < window.scrollY + 10) {
+                        top = window.scrollY + 10;
+                    }
+                    
+                    tooltip.style("left", left + "px")
+                           .style("top", top + "px");
                 })
                 .on("mouseout", (event) => {
                     tooltip.style("opacity", 0);
