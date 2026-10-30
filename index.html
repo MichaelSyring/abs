@@ -11,10 +11,10 @@
         .controls { display: flex; gap: 15px; margin-bottom: 30px; }
         select { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; outline: none; cursor: pointer; }
         
-        /* Max-width expanded to accommodate the new 1600px canvas */
         #chart-container { width: 100%; max-width: 1600px; position: relative; overflow-x: auto; }
         
-        .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 10; }
+        /* Tooltip styling remains the same, but now floats globally */
+        .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 1000; }
         .tooltip .name { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #58a6ff; }
         .tooltip .stat { margin: 3px 0; }
         
@@ -22,8 +22,6 @@
         .axis-text { fill: #8b949e; font-size: 12px; }
         .legend { display: flex; gap: 20px; font-size: 12px; margin-bottom: 10px; }
         .legend-item { display: flex; align-items: center; gap: 6px; }
-        
-        /* Legend dots slightly smaller to match the new scale */
         .dot { width: 8px; height: 8px; border-radius: 50%; }
     </style>
 </head>
@@ -43,13 +41,15 @@
         <select id="league-filter"><option value="all">All Leagues</option></select>
     </div>
 
+    <!-- The container for the SVG graph -->
     <div id="chart-container">
-        <div class="tooltip" id="tooltip"></div>
         <svg id="chart"></svg>
     </div>
 
+    <!-- The Tooltip is now appended directly to the body to prevent container clipping -->
+    <div class="tooltip" id="tooltip"></div>
+
     <script>
-        // MASSIVE CANVAS EXPANSION: 1600x1000 to physically separate the logarithmic clusters
         const width = 1600;
         const height = 1000;
         
@@ -184,8 +184,6 @@
                 
                 if (!positionMap[key]) positionMap[key] = 0;
                 
-                // REDUCED SPACING: Because dot radius is now 2.5 (diameter 5), a spiral 
-                // radius of 6.5 yields a perfectly proportioned 1.5px gap between dots.
                 const [offsetX, offsetY] = getHexSpiral(positionMap[key], 6.5);
                 d.cx = xScale(d.challenges) + offsetX;
                 d.cy = yScale(d.overturn_rate) + offsetY;
@@ -195,7 +193,6 @@
 
             data.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
 
-            // REDUCED DOT RADIUS: Shrunk to 2.5 to compress the overall cluster sizes
             const circles = svg.selectAll(".dot")
                 .data(data)
                 .enter().append("circle")
@@ -235,14 +232,17 @@
                 let left = event.pageX + 15;
                 let top = event.pageY + 15;
                 
-                if (event.clientX + tWidth + 20 > window.innerWidth) {
+                // STRICT RIGHT EDGE DETECTION: Prevent bleeding horizontally
+                if (left + tWidth > document.body.clientWidth - 10) {
                     left = event.pageX - tWidth - 15;
                 }
                 
-                if (event.clientY + tHeight + 20 > window.innerHeight) {
+                // STRICT BOTTOM EDGE DETECTION: Flip above the cursor if it breaches the viewport floor
+                if (event.clientY + tHeight > window.innerHeight - 10) {
                     top = event.pageY - tHeight - 15;
                 }
                 
+                // STRICT TOP EDGE DETECTION
                 if (top < window.scrollY + 10) {
                     top = window.scrollY + 10;
                 }
