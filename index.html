@@ -11,9 +11,12 @@
         .controls { display: flex; gap: 15px; margin-bottom: 30px; }
         select { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; outline: none; cursor: pointer; }
         #chart-container { width: 100%; max-width: 1200px; position: relative; }
-        .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.1s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 10; }
+        
+        /* Removed CSS transition to ensure immediate, ghost-free tooltip updates on dense clusters */
+        .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 10; }
         .tooltip .name { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #58a6ff; }
         .tooltip .stat { margin: 3px 0; }
+        
         .grid-line { stroke: #30363d; stroke-width: 1; }
         .axis-text { fill: #8b949e; font-size: 12px; }
         .legend { display: flex; gap: 20px; font-size: 12px; margin-bottom: 10px; }
@@ -46,11 +49,8 @@
         const width = 1200;
         const height = 750;
         
-        // EXPANDED MARGINS: Increased significantly (Top/Bottom to 80, Left to 120) 
-        // to give the extreme 100%, 0%, and 1-challenge clusters plenty of room to 
-        // expand outward without bleeding off the edge of the SVG.
+        // Large margins ensure clusters on 100% and 0% axes don't bleed out of frame
         const margin = { top: 80, right: 80, bottom: 80, left: 120 };
-        
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;
 
@@ -123,7 +123,6 @@
                 (league === "all" || d.league === league)
             );
 
-            filteredData.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
             render(filteredData);
         }
 
@@ -152,8 +151,6 @@
                     .attr("text-anchor", "end")
                     .text(tick + "%");
             });
-            
-            // Adjusted label position for increased margin
             svg.append("text").attr("class", "axis-text").attr("transform", "rotate(-90)")
                 .attr("x", -innerHeight/2).attr("y", -60).attr("text-anchor", "middle").text("Overturn rate");
 
@@ -169,11 +166,12 @@
                     .attr("text-anchor", "middle")
                     .text(tick);
             });
-            
-            // Adjusted label position for increased margin
             svg.append("text").attr("class", "axis-text")
                 .attr("x", innerWidth/2).attr("y", innerHeight + 60)
                 .attr("text-anchor", "middle").text("Challenges made • Log scale");
+
+            // ALGORITHM FIX 1: Sort by name so roles are naturally mixed in the spiral (fixes the crust/jagged edges)
+            data.sort((a, b) => a.player_name.localeCompare(b.player_name));
 
             const positionMap = {};
             data.forEach(d => {
@@ -181,72 +179,79 @@
                 const key = `${d.challenges}_${roundedRate}`;
                 
                 if (!positionMap[key]) positionMap[key] = 0;
-                
                 const [offsetX, offsetY] = getHexSpiral(positionMap[key], 8);
                 d.cx = xScale(d.challenges) + offsetX;
                 d.cy = yScale(d.overturn_rate) + offsetY;
-                
                 positionMap[key]++;
             });
 
-            svg.selectAll(".dot")
+            // ALGORITHM FIX 2: Re-sort by role so Catchers and Pitchers are drawn completely on top of the DOM
+            data.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+
+            // Draw the base circles
+            const circles = svg.selectAll(".dot")
                 .data(data)
                 .enter().append("circle")
+                .attr("class", "dot")
                 .attr("cx", d => d.cx)
                 .attr("cy", d => d.cy)
                 .attr("r", 3.5)
                 .attr("fill", d => roleColors[d.role] || "#ffffff")
-                .style("cursor", "crosshair")
-                .on("mouseover", (event, d) => {
-                    tooltip.style("opacity", 1)
-                        .html(`
-                            <div class="name">${d.player_name} (${d.role})</div>
-                            <div class="stat"><b>Challenges:</b> ${d.challenges}</div>
-                            <div class="stat"><b>Overturned:</b> ${d.overturned}</div>
-                            <div class="stat"><b>Rate:</b> ${d.overturn_rate.toFixed(1)}%</div>
-                            <div class="stat"><b>Team/League:</b> ${d.team} / ${d.league}</div>
-                        `);
-                    
-                    d3.select(event.currentTarget)
-                        .raise()
-                        .attr("stroke", "#fff")
-                        .attr("stroke-width", 2)
-                        .attr("r", 5);
-                })
-                .on("mousemove", (event) => {
-                    // DYNAMIC POSITIONING LOGIC
-                    const tNode = tooltip.node();
-                    const tWidth = tNode.offsetWidth;
-                    const tHeight = tNode.offsetHeight;
-                    
-                    // Default position slightly down and right of the cursor
-                    let left = event.pageX + 15;
-                    let top = event.pageY - 28;
-                    
-                    // If the tooltip bleeds off the RIGHT edge, flip it to the left side
-                    if (left + tWidth > window.innerWidth - 20) {
-                        left = event.pageX - tWidth - 15;
-                    }
-                    
-                    // If the tooltip bleeds off the BOTTOM edge, push it upward
-                    if (top + tHeight > window.innerHeight + window.scrollY - 20) {
-                        top = event.pageY - tHeight - 15;
-                    }
-                    
-                    // Prevent the tooltip from bleeding off the TOP edge
-                    if (top < window.scrollY + 10) {
-                        top = window.scrollY + 10;
-                    }
-                    
-                    tooltip.style("left", left + "px")
-                           .style("top", top + "px");
-                })
-                .on("mouseout", (event) => {
-                    tooltip.style("opacity", 0);
-                    d3.select(event.currentTarget)
-                        .attr("stroke", "none")
-                        .attr("r", 3.5);
-                });
+                .style("cursor", "crosshair");
+
+            // A separate, invisible layer placed physically above the dots for bug-free hovering
+            const hoverLayer = svg.append("g").attr("class", "hover-layer").style("pointer-events", "none");
+
+            circles.on("mouseenter", function(event, d) {
+                tooltip.style("opacity", 1)
+                    .html(`
+                        <div class="name">${d.player_name} (${d.role})</div>
+                        <div class="stat"><b>Challenges:</b> ${d.challenges}</div>
+                        <div class="stat"><b>Overturned:</b> ${d.overturned}</div>
+                        <div class="stat"><b>Rate:</b> ${d.overturn_rate.toFixed(1)}%</div>
+                        <div class="stat"><b>Team/League:</b> ${d.team} / ${d.league}</div>
+                    `);
+                
+                // Draw a brand new highlight circle on top, preventing DOM-movement lingering bugs
+                hoverLayer.selectAll("*").remove();
+                hoverLayer.append("circle")
+                    .attr("cx", d.cx)
+                    .attr("cy", d.cy)
+                    .attr("r", 5)
+                    .attr("fill", roleColors[d.role] || "#ffffff")
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 2);
+            })
+            .on("mousemove", function(event) {
+                const tNode = tooltip.node();
+                const tWidth = tNode.offsetWidth || 200;
+                const tHeight = tNode.offsetHeight || 120;
+                
+                // Default position slightly down and to the right
+                let left = event.pageX + 15;
+                let top = event.pageY + 15;
+                
+                // Smart Edge Detection: Flip left if hitting the right boundary
+                if (event.clientX + tWidth + 20 > window.innerWidth) {
+                    left = event.pageX - tWidth - 15;
+                }
+                
+                // Smart Edge Detection: Flip up if hitting the bottom boundary
+                if (event.clientY + tHeight + 20 > window.innerHeight) {
+                    top = event.pageY - tHeight - 15;
+                }
+                
+                // Top boundary failsafe
+                if (top < window.scrollY + 10) {
+                    top = window.scrollY + 10;
+                }
+                
+                tooltip.style("left", left + "px").style("top", top + "px");
+            })
+            .on("mouseleave", function(event) {
+                tooltip.style("opacity", 0);
+                hoverLayer.selectAll("*").remove(); // Instantly destroy the hover highlight
+            });
         }
     </script>
 </body>
