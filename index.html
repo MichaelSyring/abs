@@ -7,32 +7,50 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; margin: 0; padding: 30px; }
-        h2 { margin-top: 0; font-weight: 600; color: #fff; }
+        
+        /* Updated Title Header Styling */
+        .header-container { margin-bottom: 20px; }
+        h2 { margin: 0 0 8px 0; font-weight: 700; color: #fff; font-size: 28px; letter-spacing: -0.5px; }
+        .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
+        
+        .legend { display: flex; justify-content: space-between; font-size: 13px; font-weight: 500; margin-bottom: 20px; max-width: 1400px; padding-bottom: 15px; border-bottom: 1px solid #30363d; }
+        .legend-group { display: flex; gap: 30px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .legend-total { color: #8b949e; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+
         .controls { display: flex; gap: 15px; margin-bottom: 30px; }
         select { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 8px 12px; border-radius: 6px; outline: none; cursor: pointer; }
         
         #chart-container { width: 100%; max-width: 1600px; position: relative; overflow-x: auto; }
         
-        /* Tooltip styling remains the same, but now floats globally */
         .tooltip { position: absolute; text-align: left; padding: 12px; font-size: 13px; background: rgba(33, 38, 45, 0.95); border: 1px solid #30363d; border-radius: 6px; pointer-events: none; opacity: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.5); color: #fff; z-index: 1000; }
         .tooltip .name { font-weight: bold; font-size: 15px; margin-bottom: 6px; color: #58a6ff; }
         .tooltip .stat { margin: 3px 0; }
         
         .grid-line { stroke: #30363d; stroke-width: 1; }
         .axis-text { fill: #8b949e; font-size: 12px; }
-        .legend { display: flex; gap: 20px; font-size: 12px; margin-bottom: 10px; }
-        .legend-item { display: flex; align-items: center; gap: 6px; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; }
+        
+        /* Colored Text for the Legend */
+        .color-catchers { color: #1f77b4; }
+        .color-batters { color: #39ff14; }
+        .color-pitchers { color: #ff69b4; }
     </style>
 </head>
 <body>
 
-    <h2>Success, with the workload in view</h2>
+    <div class="header-container">
+        <h2>Success, with the workload in view</h2>
+        <div class="subtitle" id="dynamic-subtitle">Loading data...</div>
+    </div>
     
     <div class="legend">
-        <div class="legend-item"><div class="dot" style="background: #1f77b4;"></div> Catchers</div>
-        <div class="legend-item"><div class="dot" style="background: #39ff14;"></div> Batters</div>
-        <div class="legend-item"><div class="dot" style="background: #ff69b4;"></div> Pitchers</div>
+        <div class="legend-group">
+            <div class="legend-item color-catchers"><div class="dot" style="background: #1f77b4;"></div> Catchers <span id="count-catchers">· 0 dots</span></div>
+            <div class="legend-item color-batters"><div class="dot" style="background: #39ff14;"></div> Batters <span id="count-batters">· 0 dots</span></div>
+            <div class="legend-item color-pitchers"><div class="dot" style="background: #ff69b4;"></div> Pitchers <span id="count-pitchers">· 0 dots</span></div>
+        </div>
+        <div class="legend-total" id="count-total">0 player-role dots</div>
     </div>
 
     <div class="controls">
@@ -41,19 +59,17 @@
         <select id="league-filter"><option value="all">All Leagues</option></select>
     </div>
 
-    <!-- The container for the SVG graph -->
     <div id="chart-container">
         <svg id="chart"></svg>
     </div>
 
-    <!-- The Tooltip is now appended directly to the body to prevent container clipping -->
     <div class="tooltip" id="tooltip"></div>
 
     <script>
         const width = 1600;
         const height = 1000;
         
-        const margin = { top: 80, right: 80, bottom: 80, left: 120 };
+        const margin = { top: 60, right: 100, bottom: 80, left: 80 };
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;
 
@@ -66,17 +82,8 @@
         const tooltip = d3.select("#tooltip");
         let globalData = [];
 
-        const roleColors = {
-            "Catcher": "#1f77b4",  
-            "Batter": "#39ff14",   
-            "Pitcher": "#ff69b4"   
-        };
-
-        const roleOrder = {
-            "Batter": 1,
-            "Catcher": 2,
-            "Pitcher": 3
-        };
+        const roleColors = { "Catcher": "#1f77b4", "Batter": "#39ff14", "Pitcher": "#ff69b4" };
+        const roleOrder = { "Batter": 1, "Catcher": 2, "Pitcher": 3 };
 
         function getHexSpiral(index, radius) {
             if (index === 0) return [0, 0];
@@ -126,22 +133,45 @@
                 (league === "all" || d.league === league)
             );
 
+            // DYNAMIC TITLE AND LEGEND UPDATES
+            const uniquePlayers = new Set(filteredData.map(d => d.player_name)).size;
+            
+            let seasonText = season === 'all' ? 'All Seasons' : `${season} regular season`;
+            let teamText = team === 'all' ? 'All Teams' : `${team}`;
+            let leagueText = league === 'all' ? 'All Leagues' : `${league}`;
+            
+            document.getElementById('dynamic-subtitle').innerText = 
+                `${leagueText} ${seasonText} · ${uniquePlayers} players · All ${filteredData.length} player-role dots separated`;
+
+            let catchers = filteredData.filter(d => d.role === 'Catcher').length;
+            let batters = filteredData.filter(d => d.role === 'Batter').length;
+            let pitchers = filteredData.filter(d => d.role === 'Pitcher').length;
+
+            document.getElementById('count-catchers').innerText = `· ${catchers} dots`;
+            document.getElementById('count-batters').innerText = `· ${batters} dots`;
+            document.getElementById('count-pitchers').innerText = `· ${pitchers} dots`;
+            document.getElementById('count-total').innerText = `${filteredData.length} player-role dots`;
+
             render(filteredData);
         }
 
         function render(data) {
             svg.selectAll("*").remove();
-
             if (data.length === 0) return;
 
+            // AXIS PADDING LOGIC:
+            // Domain starts at 0.5 (Log scale can't be 0) and extends to max + 50 to create horizontal padding
+            const maxChallenges = Math.max(200, d3.max(data, d => d.challenges));
             const xScale = d3.scaleLog()
-                .domain([1, Math.max(200, d3.max(data, d => d.challenges))])
+                .domain([0.5, maxChallenges + (maxChallenges * 0.5)])
                 .range([0, innerWidth]);
 
+            // Y domain maps from -15% to 115% to create vertical padding above 100% and below 0%
             const yScale = d3.scaleLinear()
-                .domain([0, 100])
+                .domain([-15, 115])
                 .range([innerHeight, 0]);
 
+            // Draw manual gridlines only at the intended tick intervals (0, 25, 50, 75, 100)
             const yTicks = [0, 25, 50, 75, 100];
             yTicks.forEach(tick => {
                 svg.append("line")
@@ -156,23 +186,26 @@
             });
             
             svg.append("text").attr("class", "axis-text").attr("transform", "rotate(-90)")
-                .attr("x", -innerHeight/2).attr("y", -60).attr("text-anchor", "middle").text("Overturn rate");
+                .attr("x", -innerHeight/2).attr("y", -50).attr("text-anchor", "middle").text("Overturn rate");
 
             const xTicks = [1, 2, 5, 10, 20, 50, 100, 200];
             xTicks.forEach(tick => {
-                svg.append("line")
-                    .attr("class", "grid-line")
-                    .attr("x1", xScale(tick)).attr("x2", xScale(tick))
-                    .attr("y1", 0).attr("y2", innerHeight);
-                svg.append("text")
-                    .attr("class", "axis-text")
-                    .attr("x", xScale(tick)).attr("y", innerHeight + 20)
-                    .attr("text-anchor", "middle")
-                    .text(tick);
+                // Ensure we only draw X ticks that are within the current data max to avoid empty space lines
+                if (tick <= maxChallenges) {
+                    svg.append("line")
+                        .attr("class", "grid-line")
+                        .attr("x1", xScale(tick)).attr("x2", xScale(tick))
+                        .attr("y1", 0).attr("y2", innerHeight);
+                    svg.append("text")
+                        .attr("class", "axis-text")
+                        .attr("x", xScale(tick)).attr("y", innerHeight + 20)
+                        .attr("text-anchor", "middle")
+                        .text(tick);
+                }
             });
             
             svg.append("text").attr("class", "axis-text")
-                .attr("x", innerWidth/2).attr("y", innerHeight + 60)
+                .attr("x", innerWidth/2).attr("y", innerHeight + 50)
                 .attr("text-anchor", "middle").text("Challenges made • Log scale");
 
             data.sort((a, b) => a.player_name.localeCompare(b.player_name));
@@ -232,17 +265,14 @@
                 let left = event.pageX + 15;
                 let top = event.pageY + 15;
                 
-                // STRICT RIGHT EDGE DETECTION: Prevent bleeding horizontally
-                if (left + tWidth > document.body.clientWidth - 10) {
+                if (event.clientX + tWidth + 20 > window.innerWidth) {
                     left = event.pageX - tWidth - 15;
                 }
                 
-                // STRICT BOTTOM EDGE DETECTION: Flip above the cursor if it breaches the viewport floor
                 if (event.clientY + tHeight > window.innerHeight - 10) {
                     top = event.pageY - tHeight - 15;
                 }
                 
-                // STRICT TOP EDGE DETECTION
                 if (top < window.scrollY + 10) {
                     top = window.scrollY + 10;
                 }
